@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, urlparse
 
 
 DEFAULT_PORT = int(os.getenv("MOCK_PORT", "8088"))
-REQUIRE_AUTH = os.getenv("MOCK_REQUIRE_AUTH", "true").lower() not in {"0", "false", "no"}
+REQUIRE_AUTH = os.getenv("MOCK_REQUIRE_AUTH", "false").lower() not in {"0", "false", "no"}
 DEFAULT_SCENARIO = os.getenv("MOCK_SCENARIO", "success")
 
 TOKENS: dict[str, str] = {}
