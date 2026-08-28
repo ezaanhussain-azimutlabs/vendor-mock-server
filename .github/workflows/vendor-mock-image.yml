@@ -1,0 +1,66 @@
+name: Mashreq vendor mock image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/mashreq-vendor-mock
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute image version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build vendor mock image
+        run: |
+          docker build --pull \
+            -t "$IMAGE:${{ steps.version.outputs.VERSION }}" \
+            -t "$IMAGE:latest" \
+            -t "$IMAGE:$GITHUB_SHA" \
+            .
+
+      - name: Run vendor mock regression test
+        run: |
+          docker run -d --name mashreq-vendor-mock-test -p 8088:8088 "$IMAGE:$GITHUB_SHA"
+          trap 'docker rm -f mashreq-vendor-mock-test' EXIT
+          for attempt in {1..15}; do
+            if curl --fail --silent http://127.0.0.1:8088/health; then
+              break
+            fi
+            sleep 1
+          done
+          python3 smoke_test.py http://127.0.0.1:8088/mashreqtest/pakistan
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push vendor mock image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push "$IMAGE:${{ steps.version.outputs.VERSION }}"
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:$GITHUB_SHA"
